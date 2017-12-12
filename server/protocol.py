@@ -2,10 +2,11 @@
 # coding=utf-8
 
 import asyncio
+import logging
 from enum import Enum
 from abc import abstractmethod
 
-
+logger = logging.getLogger(__name__)
 
 class Protocol_helper:
     def __init__(self):
@@ -15,6 +16,34 @@ class Protocol_helper:
     @abstractmethod
     def main_dispatch(self):
         pass
+
+class Protocol_helper_ECHO(Protocol_helper):
+    STATE = Enum('ECHO_STATE', 'STATE_NORMAL STATE_CLOSE')
+
+    @asyncio.coroutine
+    def main_dispatch(self, local_connection):
+        logger.info("INIT echo protocol instance")
+        local_connection.stage = Protocol_helper_ECHO.STATE.STATE_NORMAL
+        while True:
+            if local_connection.stage == Protocol_helper_ECHO.STATE.STATE_NORMAL:
+                yield from self.echo(local_connection)
+            elif local_connection.stage == Protocol_helper_ECHO.STATE.STATE_CLOSE:
+                yield from self.close(local_connection)
+            else:
+                raise Exception
+
+    @asyncio.coroutine
+    def echo(self, local_connection):
+        data = yield from local_connection.read(line=True)
+        if data.startswith(b'exit'):
+            local_connection.stage = Protocol_helper_ECHO.STATE.STATE_CLOSE
+            return
+        yield from local_connection.write(b'ECHO: ' + data)
+
+    @asyncio.coroutine
+    def close(self, local_connection):
+        yield from local_connection.write(b'\nSHUTDOWN!\n')
+        local_connection.close()
 
 
 class Protocol_helper_SOCK5(Protocol_helper):
@@ -105,9 +134,17 @@ class Protocol_helper_SOCK5(Protocol_helper):
                 local_connection.peer, remote_connection.peer, upload_bytes, download_bytes
             ))
         except:
-            local_connection.clear()
-            remote_connection.clear()
             yield from local_connection.read()
             yield from asyncio.sleep(0.1)
+            remote_connection.clear()
+            local_connection.clear()
             local_connection.stage = Protocol_helper_SOCK5.STAGE_ADDR
+
+class Protocol_Client_SOCK5():
+    def __init__(self):
+        pass
+
+    @asyncio.coroutine
+    def main_dispatch(self):
+        pass
 

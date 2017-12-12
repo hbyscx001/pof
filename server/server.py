@@ -25,11 +25,11 @@ def main():
     try:
         loop.run_forever()
     except KeyboardInterrupt:
-        logger.warning("[*] Got signal exit")
+        logger.warning("Got signal exit")
 
     server.close()
     loop.run_until_complete(server.wait_closed())
-    logger.info("[*] Server STOP")
+    logger.info("Server STOP")
     loop.close()
 
 

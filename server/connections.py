@@ -2,15 +2,21 @@
 # coding=utf-8
 
 import asyncio
+import collections
+import logging
 
 from crypter import Default_crypter
+
+logger = logging.getLogger(__name__)
+
+stream_count = collections.namedtuple('stream_count', ['read_stream', 'write_stream'])
 
 class Connection_lost(Exception):
     pass
 
 class Connection:
     # def __init__(self, reader, writer, crypter=None):
-    def __init__(self, reader, writer, crypter=None):
+    def __init__(self, reader, writer, crypter=None, history_len=10):
         self.peer = writer.get_extra_info('peername')
 
         self._reader = reader
@@ -19,10 +25,14 @@ class Connection:
         self._write_bytes = 0
         self._crypter = crypter or Default_crypter()
         self._stage = None
+        self._history = collections.deque(maxlen=history_len)
 
     @asyncio.coroutine
-    def read(self, n=-1):
-        crypt_data = yield from self._reader.read(n)
+    def read(self, n=-1, line=False):
+        if not line:
+            crypt_data = yield from self._reader.read(n)
+        else:
+            crypt_data = yield from self._reader.readline()
         self._read_bytes += len(crypt_data)
         return self._crypter.decrypt(crypt_data)
 
@@ -40,6 +50,7 @@ class Connection:
             yield from outer_conn.write(data)
 
     def clear(self):
+        self._history.append(stream_count(self._write_bytes, self._read_bytes))
         self._read_bytes = 0
         self._write_bytes = 0
 
@@ -50,7 +61,7 @@ class Connection:
     def stage(self):
         return self._stage
 
-    @stage.set
+    @stage.setter
     def stage(self, value):
         self._stage = value
 
@@ -65,5 +76,6 @@ if __name__ == '__main__':
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(test())
+
 
 
